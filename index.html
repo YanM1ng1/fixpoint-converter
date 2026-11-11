@@ -1,0 +1,825 @@
+<!doctype html>
+<html lang="zh-Hant">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Fixed / Float Converter</title>
+<meta name="description" content="Decimal ↔ Fixed point (Qm.n) / custom Floating point (EeMm) converter">
+<style>
+:root{
+  --bg:#f6f6f3;--card:#ffffff;--fg:#1c1c1f;--muted:#6a6a72;--border:#dddcd6;--accent:#2b66d9;
+  --sign:#d1453b;--exp:#2b66d9;--man:#25935a;--int:#8550cf;--frac:#25935a;--zero:#f0efea;--zerofg:#9a9aa0;
+  --warn:#a86400;--ok:#25935a;--errbg:#fdecea;--errfg:#a52a1f;
+}
+@media (prefers-color-scheme:dark){:root{
+  --bg:#131315;--card:#1d1d20;--fg:#ececf0;--muted:#9c9ca6;--border:#34343a;--accent:#76a3ff;
+  --sign:#ff7b6f;--exp:#76a3ff;--man:#5fd193;--int:#b997ff;--frac:#5fd193;--zero:#2a2a2f;--zerofg:#6d6d76;
+  --warn:#f0b04a;--ok:#5fd193;--errbg:#3a1f1d;--errfg:#ff9d93;
+}}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--fg);font:15px/1.5 system-ui,-apple-system,"Segoe UI","Noto Sans TC","Microsoft JhengHei",sans-serif}
+.wrap{max-width:980px;margin:0 auto;padding:24px 16px 48px}
+.top{display:flex;justify-content:space-between;align-items:flex-start;gap:12px}
+h1{font-size:1.5rem;margin:0 0 4px}
+.sub{color:var(--muted);margin:0 0 20px}
+.tabs{display:flex;gap:6px;margin-bottom:16px;flex-wrap:wrap}
+.tabs button,.seg button,.chip{font:inherit;cursor:pointer;border:1px solid var(--border);background:var(--card);color:var(--fg);border-radius:8px;padding:8px 14px}
+.tabs button.on,.seg button.on{background:var(--accent);border-color:var(--accent);color:#fff}
+.card{background:var(--card);border:1px solid var(--border);border-radius:12px;padding:16px;margin-bottom:14px}
+.card h2{font-size:1rem;margin:0 0 12px;display:flex;justify-content:space-between;gap:8px;flex-wrap:wrap;align-items:baseline}
+.card h2 .fmt{font-family:ui-monospace,Consolas,monospace;color:var(--accent);font-weight:600}
+.chips{display:flex;flex-wrap:wrap;gap:6px;margin-bottom:14px}
+.chip{padding:4px 10px;font-size:.85rem;border-radius:999px}
+.chip:hover{border-color:var(--accent)}
+.grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(170px,1fr));gap:12px 16px}
+label.f{display:flex;flex-direction:column;gap:4px;font-size:.85rem;color:var(--muted)}
+label.c{display:flex;align-items:center;gap:6px;font-size:.9rem}
+input[type=number],input[type=text],select{font:inherit;color:var(--fg);background:var(--bg);border:1px solid var(--border);border-radius:8px;padding:7px 9px;width:100%}
+input:disabled{opacity:.55}
+.seg{display:inline-flex;gap:0;margin-bottom:10px}
+.seg button{border-radius:0;padding:6px 12px;font-size:.9rem}
+.seg button:first-child{border-radius:8px 0 0 8px}
+.seg button:last-child{border-radius:0 8px 8px 0;border-left:none}
+.lang{flex-shrink:0;margin:4px 0 0}
+.lang button{padding:4px 10px;font-size:.85rem}
+#fx-in,#fp-in{font-family:ui-monospace,Consolas,monospace;font-size:1.05rem;padding:10px 12px}
+.hint{color:var(--muted);font-size:.82rem;margin-top:6px}
+.err{background:var(--errbg);color:var(--errfg);border-radius:8px;padding:8px 12px;margin-top:10px;font-size:.9rem}
+.err:empty{display:none}
+.bits{display:flex;flex-wrap:wrap;gap:10px 6px;align-items:flex-end;margin-bottom:14px}
+.bgroup{display:flex;flex-direction:column;gap:3px}
+.blabel{font-size:.72rem;color:var(--muted)}
+.brow{display:flex;flex-wrap:wrap;gap:2px}
+.bit{font:600 .85rem ui-monospace,Consolas,monospace;width:22px;height:28px;border-radius:4px;border:none;cursor:pointer;color:#fff;padding:0}
+.bit.s{background:var(--sign)}.bit.e{background:var(--exp)}.bit.m{background:var(--man)}.bit.i{background:var(--int)}.bit.fr{background:var(--frac)}
+.bit.zero{background:var(--zero);color:var(--zerofg);box-shadow:inset 0 0 0 1px var(--border)}
+.bit:hover{outline:2px solid var(--accent);outline-offset:1px}
+.point{font:700 1.3rem ui-monospace,monospace;color:var(--muted);align-self:flex-end;padding-bottom:2px}
+table{width:100%;border-collapse:collapse}
+td{padding:7px 8px;border-top:1px solid var(--border);vertical-align:top}
+td:first-child{color:var(--muted);white-space:nowrap;width:1%;padding-right:16px}
+.mono{font-family:ui-monospace,Consolas,monospace;word-break:break-all}
+details summary{cursor:pointer}
+details div{margin-top:4px;font-size:.85rem}
+.tag{display:inline-block;font-size:.78rem;padding:1px 8px;border-radius:999px;margin:0 4px 2px 0;border:1px solid currentColor}
+.tag.ok{color:var(--ok)}.tag.warn{color:var(--warn)}
+.copy{font-size:.75rem;margin-left:8px;cursor:pointer;color:var(--accent);background:none;border:none;padding:0}
+footer{color:var(--muted);font-size:.82rem;margin-top:24px}
+footer code{font-size:.8rem}
+[hidden]{display:none!important}
+@media (max-width:560px){td:first-child{padding-right:10px}.bit{width:19px;height:26px}}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="top">
+    <div>
+      <h1 data-i18n="title"></h1>
+      <p class="sub" data-i18n="sub"></p>
+    </div>
+    <div class="seg lang" id="lang">
+      <button data-lang="zh">中文</button>
+      <button data-lang="en">EN</button>
+    </div>
+  </div>
+
+  <div class="tabs" id="tabs">
+    <button data-tab="fixed" class="on">Fixed point · Qm.n</button>
+    <button data-tab="float">Floating point · EeMm</button>
+  </div>
+
+  <!-- ================= FIXED ================= -->
+  <section id="fixed">
+    <div class="card">
+      <h2><span data-i18n="params"></span> <span class="fmt" id="fx-fmt"></span></h2>
+      <div class="chips" id="fx-presets"></div>
+      <div class="grid">
+        <label class="f"><span data-i18n="fxM"></span><input type="number" id="fx-m" value="7" min="0" max="512"></label>
+        <label class="f"><span data-i18n="fxN"></span><input type="number" id="fx-n" value="8" min="0" max="512"></label>
+        <label class="f">Rounding
+          <select id="fx-round">
+            <option value="rne">Nearest, ties to even (RNE)</option>
+            <option value="rna">Nearest, ties away from 0</option>
+            <option value="rtz">Toward 0 (truncate)</option>
+            <option value="rdn">Toward −∞ (floor)</option>
+            <option value="rup">Toward +∞ (ceil)</option>
+          </select></label>
+        <label class="f">Overflow
+          <select id="fx-ovf">
+            <option value="sat">Saturate</option>
+            <option value="wrap" data-i18n="optWrap"></option>
+          </select></label>
+        <label class="c"><input type="checkbox" id="fx-signed" checked> <span data-i18n="signed"></span></label>
+        <label class="c"><input type="checkbox" id="fx-incl"> <span data-i18n="incl"></span></label>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="seg" data-panel="fx">
+        <button data-mode="enc" class="on" data-i18n="modeEnc"></button>
+        <button data-mode="dec" data-i18n="modeDec"></button>
+      </div>
+      <input type="text" id="fx-in" value="3.14159" autocomplete="off" spellcheck="false">
+      <div class="hint" id="fx-hint"></div>
+      <div class="err" id="fx-err"></div>
+    </div>
+
+    <div class="card" id="fx-out">
+      <h2 data-i18n="result"></h2>
+      <div class="bits" id="fx-bits"></div>
+      <table><tbody id="fx-table"></tbody></table>
+    </div>
+
+    <div class="card">
+      <h2 data-i18n="range"></h2>
+      <table><tbody id="fx-range"></tbody></table>
+    </div>
+  </section>
+
+  <!-- ================= FLOAT ================= -->
+  <section id="float" hidden>
+    <div class="card">
+      <h2><span data-i18n="params"></span> <span class="fmt" id="fp-fmt"></span></h2>
+      <div class="chips" id="fp-presets"></div>
+      <div class="grid">
+        <label class="f"><span data-i18n="fpE"></span><input type="number" id="fp-e" value="8" min="1" max="20"></label>
+        <label class="f"><span data-i18n="fpM"></span><input type="number" id="fp-m" value="23" min="0" max="240"></label>
+        <label class="f">Exponent bias<input type="number" id="fp-bias" value="127" disabled></label>
+        <label class="c" style="align-self:end;padding-bottom:8px"><input type="checkbox" id="fp-bauto" checked> <span data-i18n-html="bauto"></span></label>
+        <label class="f"><span data-i18n="special"></span>
+          <select id="fp-sp">
+            <option value="ieee" data-i18n="spIeee"></option>
+            <option value="fn" data-i18n="spFn"></option>
+            <option value="none" data-i18n="spNone"></option>
+          </select></label>
+        <label class="f">Rounding
+          <select id="fp-round">
+            <option value="rne">Nearest, ties to even (RNE)</option>
+            <option value="rna">Nearest, ties away from 0</option>
+            <option value="rtz">Toward 0 (truncate)</option>
+            <option value="rdn">Toward −∞ (floor)</option>
+            <option value="rup">Toward +∞ (ceil)</option>
+          </select></label>
+        <label class="f">Overflow
+          <select id="fp-ovf">
+            <option value="inf" data-i18n="ovfInf"></option>
+            <option value="sat" data-i18n="ovfSat"></option>
+          </select></label>
+        <label class="c" style="align-self:end;padding-bottom:8px"><input type="checkbox" id="fp-sub" checked> <span data-i18n="subn"></span></label>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="seg" data-panel="fp">
+        <button data-mode="enc" class="on" data-i18n="modeEnc"></button>
+        <button data-mode="dec" data-i18n="modeDec"></button>
+      </div>
+      <input type="text" id="fp-in" value="0.1" autocomplete="off" spellcheck="false">
+      <div class="hint" id="fp-hint"></div>
+      <div class="err" id="fp-err"></div>
+    </div>
+
+    <div class="card" id="fp-out">
+      <h2 data-i18n="result"></h2>
+      <div class="bits" id="fp-bits"></div>
+      <table><tbody id="fp-table"></tbody></table>
+    </div>
+
+    <div class="card">
+      <h2 data-i18n="range"></h2>
+      <table><tbody id="fp-range"></tbody></table>
+    </div>
+  </section>
+
+  <footer data-i18n-html="footer"></footer>
+</div>
+
+<script>
+'use strict';
+/* ====================== i18n ====================== */
+const I18N = {
+  zh: {
+    title: 'Fixed / Floating Point 轉換器',
+    sub: '十進位 ↔ Fixed point (Qm.n) ↔ 自訂 Floating point (EeMm)。全部用 BigInt 精確計算；點 bit 可以直接切換。',
+    params: '格式參數', result: '結果', range: '格式範圍',
+    fxM: 'm（整數位元）', fxN: 'n（小數位元）',
+    optWrap: 'Wrap-around（取低位元）',
+    signed: "Signed（two's complement）", incl: 'm 已包含 sign bit（ARM 慣例）',
+    modeEnc: '十進位 → 編碼', modeDec: 'Bits / Hex → 十進位',
+    fpE: 'e（exponent 位元）', fpM: 'm（mantissa 位元）',
+    bauto: 'bias 自動 = 2<sup>e−1</sup>−1',
+    special: '特殊值（Inf / NaN）',
+    spIeee: 'IEEE 754：exp 全 1 = Inf / NaN',
+    spFn: 'FN（OCP FP8 E4M3）：無 Inf，只有 S.1…1.1…1 = NaN',
+    spNone: '無特殊值（OCP MX FP6/FP4）：全部是有限數',
+    ovfInf: 'IEEE 規則 → ±Inf（FN 格式 → NaN）', ovfSat: 'Saturate 到最大有限值',
+    subn: '支援 subnormal（關閉 = flush to zero）',
+    footer: '輸入支援：<code>-1.25</code>、<code>6.02e23</code>、分數 <code>1/3</code>、<code>pi</code>、<code>e</code>、<code>inf</code>、<code>nan</code>。Bits 模式支援 <code>0b0100_0001</code>、<code>01000001</code>、<code>0x41</code>（位數不足會在左邊補 0）。網址會記住目前的設定和語言，可以直接複製分享。',
+    // dynamic
+    fxFmtS: (P) => `${P.name} · ${P.W} bits（1 sign + ${P.intBits} int + ${P.n} frac）`,
+    fxFmtU: (P) => `${P.name} · ${P.W} bits（${P.intBits} int + ${P.n} frac）`,
+    hintFxEnc: '輸入十進位數字（例如 -1.25、1/3、pi）',
+    hintFpEnc: '輸入十進位數字（例如 0.1、-6.5e-3、1/3、pi、inf、nan）',
+    hintDec: (W) => `輸入 ${W}-bit 的 binary（0b…）或 hex（0x…）`,
+    max: '最大值', min: '最小值', res: '解析度 (1 LSB)', rawRange: 'Raw 整數範圍',
+    value: '表示值', raw: 'Raw 整數', rawNote: (n) => `（= 值 × 2^${n}）`,
+    input: '輸入值', error: '誤差（輸入 − 表示）', relErr: '相對誤差', status: '狀態',
+    cls: '類別', subNote: '（subnormal 用 emin = 1 − bias）',
+    maxFinite: '最大有限值', minNormal: '最小 normal', minSub: '最小 subnormal',
+    decDigits: '有效十進位位數', digits: (d) => `≈ ${d} 位`, specialRow: '特殊值',
+    spDescIeee: 'exp 全 1：mantissa = 0 → ±Inf，否則 NaN',
+    spDescFn: '無 Inf；exp 與 mantissa 全 1 → NaN', spDescNone: '無 Inf / NaN',
+    exact: '精確表示', rounded: '已捨入',
+    fOvfSat: 'Overflow → saturate', fOvfWrap: 'Overflow → wrap', fOvfInf: 'Overflow → ±Inf',
+    fOvfNaN: 'Overflow → NaN', fOvfMax: 'Overflow → saturate 最大值',
+    fFtz: 'Subnormal → flush to zero', fUnder: 'Underflow → 0',
+    copy: '複製', copied: '已複製',
+    longVal: (n) => `（精確值共 ${n} 位數，點開）`,
+    bitTitle: (i) => `bit ${i}（點擊切換）`,
+    lSign: 'sign', lInt: '整數', lFrac: '小數', lExp: 'exponent', lMan: 'mantissa',
+    // errors
+    eParse: (s) => '無法解析數值：' + s, eExpBig: '指數太大（|e| ≤ 5000）', eEmpty: '請輸入數值',
+    eFrac: '分數格式應為 a/b', eDiv0: '除以零', eBitsEmpty: '請輸入 bit pattern', eHex: 'Hex 格式錯誤',
+    eBin: '請輸入 0/1 二進位字串，或以 0x 開頭的 hex',
+    eTooLong: (L, W) => `輸入 ${L} bits，超過格式寬度 ${W} bits`, eTooBig: (W) => `數值超過 ${W} bits`,
+    eInt: (n) => n + ' 必須是整數', eNeg: 'm、n 不能是負數', eIncl: 'm 包含 sign bit 時，m 至少要是 1',
+    eW1: '總位元數至少要 1', eWmax: '總位元數上限 1024', eFxNaN: 'Fixed point 沒有 NaN 可以表示',
+    eERange: 'e 範圍 1–30', eMRange: 'm 範圍 0–1000',
+    eNoNaNIeee: 'm = 0 的 IEEE 格式沒有 NaN 編碼', eNoNaN: '此格式沒有 NaN 編碼',
+  },
+  en: {
+    title: 'Fixed / Floating Point Converter',
+    sub: 'Decimal ↔ Fixed point (Qm.n) ↔ custom Floating point (EeMm). Exact BigInt arithmetic; click any bit to flip it.',
+    params: 'Format', result: 'Result', range: 'Format range',
+    fxM: 'm (integer bits)', fxN: 'n (fraction bits)',
+    optWrap: 'Wrap-around (keep low bits)',
+    signed: "Signed (two's complement)", incl: 'm includes the sign bit (ARM convention)',
+    modeEnc: 'Decimal → Encoding', modeDec: 'Bits / Hex → Decimal',
+    fpE: 'e (exponent bits)', fpM: 'm (mantissa bits)',
+    bauto: 'Auto bias = 2<sup>e−1</sup>−1',
+    special: 'Special values (Inf / NaN)',
+    spIeee: 'IEEE 754: exp all ones = Inf / NaN',
+    spFn: 'FN (OCP FP8 E4M3): no Inf, only S.1…1.1…1 = NaN',
+    spNone: 'No special values (OCP MX FP6/FP4): all finite',
+    ovfInf: 'IEEE rules → ±Inf (FN formats → NaN)', ovfSat: 'Saturate to max finite',
+    subn: 'Subnormals (off = flush to zero)',
+    footer: 'Input accepts <code>-1.25</code>, <code>6.02e23</code>, fractions like <code>1/3</code>, <code>pi</code>, <code>e</code>, <code>inf</code>, <code>nan</code>. Bits mode accepts <code>0b0100_0001</code>, <code>01000001</code>, <code>0x41</code> (shorter input is zero-extended on the left). The URL keeps your current settings and language, so you can share it as a link.',
+    fxFmtS: (P) => `${P.name} · ${P.W} bits (1 sign + ${P.intBits} int + ${P.n} frac)`,
+    fxFmtU: (P) => `${P.name} · ${P.W} bits (${P.intBits} int + ${P.n} frac)`,
+    hintFxEnc: 'Enter a decimal number (e.g. -1.25, 1/3, pi)',
+    hintFpEnc: 'Enter a decimal number (e.g. 0.1, -6.5e-3, 1/3, pi, inf, nan)',
+    hintDec: (W) => `Enter a ${W}-bit binary (0b…) or hex (0x…) pattern`,
+    max: 'Max', min: 'Min', res: 'Resolution (1 LSB)', rawRange: 'Raw integer range',
+    value: 'Value', raw: 'Raw integer', rawNote: (n) => `  (= value × 2^${n})`,
+    input: 'Input', error: 'Error (input − value)', relErr: 'rel. error', status: 'Status',
+    cls: 'Class', subNote: ' (subnormal uses emin = 1 − bias)',
+    maxFinite: 'Max finite', minNormal: 'Min normal', minSub: 'Min subnormal',
+    decDigits: 'Decimal digits', digits: (d) => `≈ ${d} digits`, specialRow: 'Special values',
+    spDescIeee: 'exp all ones: mantissa = 0 → ±Inf, otherwise NaN',
+    spDescFn: 'No Inf; exp and mantissa all ones → NaN', spDescNone: 'No Inf / NaN',
+    exact: 'Exact', rounded: 'Rounded',
+    fOvfSat: 'Overflow → saturate', fOvfWrap: 'Overflow → wrap', fOvfInf: 'Overflow → ±Inf',
+    fOvfNaN: 'Overflow → NaN', fOvfMax: 'Overflow → saturate to max',
+    fFtz: 'Subnormal → flush to zero', fUnder: 'Underflow → 0',
+    copy: 'Copy', copied: 'Copied',
+    longVal: (n) => ` (exact value has ${n} digits, click to expand)`,
+    bitTitle: (i) => `bit ${i} (click to flip)`,
+    lSign: 'sign', lInt: 'integer', lFrac: 'fraction', lExp: 'exponent', lMan: 'mantissa',
+    eParse: (s) => 'Cannot parse number: ' + s, eExpBig: 'Exponent too large (|e| ≤ 5000)', eEmpty: 'Please enter a number',
+    eFrac: 'Fractions must be a/b', eDiv0: 'Division by zero', eBitsEmpty: 'Please enter a bit pattern', eHex: 'Invalid hex',
+    eBin: 'Enter a 0/1 binary string, or hex starting with 0x',
+    eTooLong: (L, W) => `Input has ${L} bits, wider than the ${W}-bit format`, eTooBig: (W) => `Value does not fit in ${W} bits`,
+    eInt: (n) => n + ' must be an integer', eNeg: 'm and n cannot be negative', eIncl: 'm must be at least 1 when it includes the sign bit',
+    eW1: 'Total width must be at least 1 bit', eWmax: 'Total width is limited to 1024 bits', eFxNaN: 'Fixed point cannot represent NaN',
+    eERange: 'e must be 1–30', eMRange: 'm must be 0–1000',
+    eNoNaNIeee: 'An IEEE format with m = 0 has no NaN encoding', eNoNaN: 'This format has no NaN encoding',
+  },
+};
+let lang = 'zh';
+function t(key, ...args){ const v = I18N[lang][key] ?? I18N.zh[key]; return typeof v === 'function' ? v(...args) : v; }
+function applyStatic(){
+  document.documentElement.lang = lang === 'zh' ? 'zh-Hant' : 'en';
+  document.title = t('title');
+  document.querySelectorAll('[data-i18n]').forEach(e => e.textContent = t(e.dataset.i18n));
+  document.querySelectorAll('[data-i18n-html]').forEach(e => e.innerHTML = t(e.dataset.i18nHtml));
+  document.querySelectorAll('#lang button').forEach(b => b.classList.toggle('on', b.dataset.lang === lang));
+}
+function setLang(l){
+  lang = l === 'en' ? 'en' : 'zh';
+  try { localStorage.setItem('fxfp-lang', lang); } catch (_) {}
+  applyStatic(); fxRun(); fpRun();
+}
+
+/* ====================== exact arithmetic helpers ====================== */
+const $ = id => document.getElementById(id);
+const P2 = k => 1n << BigInt(k);
+const babs = x => x < 0n ? -x : x;
+const mod = (a, m) => { const r = a % m; return r < 0n ? r + m : r; };
+const bitLen = n => { n = babs(n); return n === 0n ? 0 : n.toString(2).length; };
+function gcd(a, b){ a = babs(a); b = babs(b); while (b) { [a, b] = [b, a % b]; } return a || 1n; }
+
+/** round(a/b) with b>0 under the given rounding mode */
+function roundDiv(a, b, mode){
+  let q = a / b; if (a < 0n && q * b !== a) q -= 1n;     // floor
+  const r = a - q * b, c = 2n * r;                         // 0 <= r < b
+  switch (mode) {
+    case 'rdn': return q;
+    case 'rup': return r > 0n ? q + 1n : q;
+    case 'rtz': return (a < 0n && r > 0n) ? q + 1n : q;
+    case 'rna': return c > b ? q + 1n : c < b ? q : (a >= 0n ? q + 1n : q);
+    default:    return c > b ? q + 1n : c < b ? q : ((q & 1n) ? q + 1n : q); // rne
+  }
+}
+
+const PI_STR = '3.14159265358979323846264338327950288419716939937510582097494459230781640628620899862803482534211706798214808651';
+const E_STR  = '2.71828182845904523536028747135266249775724709369995957496696762772407663035354759457138217852516642742746639193';
+
+function parseDecimal(s){
+  const m = /^(\d*)(?:\.(\d*))?(?:e([+-]?\d+))?$/.exec(s);
+  if (!m || (!m[1] && !m[2])) throw new Error(t('eParse', s));
+  const ip = m[1] || '', fp = m[2] || '';
+  const ex = m[3] ? parseInt(m[3], 10) : 0;
+  if (Math.abs(ex) > 5000) throw new Error(t('eExpBig'));
+  let n = BigInt((ip + fp) || '0'), d = 10n ** BigInt(fp.length);
+  if (ex >= 0) n *= 10n ** BigInt(ex); else d *= 10n ** BigInt(-ex);
+  return { n, d };
+}
+/** returns {n,d,neg} exact rational, or {inf,neg} / {nan,neg} */
+function parseNum(str){
+  let s = String(str).trim().toLowerCase().replace(/[\s_,]/g, '');
+  if (!s) throw new Error(t('eEmpty'));
+  let neg = false;
+  if (s[0] === '-' || s[0] === '−') { neg = true; s = s.slice(1); } else if (s[0] === '+') s = s.slice(1);
+  if (['inf', 'infinity', '∞'].includes(s)) return { inf: true, neg };
+  if (s === 'nan') return { nan: true, neg };
+  let r;
+  if (s === 'pi' || s === 'π') r = parseDecimal(PI_STR);
+  else if (s === 'e') r = parseDecimal(E_STR);
+  else if (s.includes('/')) {
+    const parts = s.split('/');
+    if (parts.length !== 2) throw new Error(t('eFrac'));
+    const A = parseDecimal(parts[0]), B = parseDecimal(parts[1]);
+    if (B.n === 0n) throw new Error(t('eDiv0'));
+    r = { n: A.n * B.d, d: A.d * B.n };
+  } else r = parseDecimal(s);
+  const g = gcd(r.n, r.d);
+  return { n: (neg ? -r.n : r.n) / g, d: r.d / g, neg };
+}
+
+/** floor(log2(n/d)) for n,d > 0 */
+function floorLog2(n, d){
+  let e = bitLen(n) - bitLen(d);
+  if (e >= 0) { if (n < (d << BigInt(e))) e--; }
+  else if ((n << BigInt(-e)) < d) e--;
+  return e;
+}
+/** round(a * 2^t) for rational a=(n/d) */
+function roundScaled(n, d, t, mode){
+  return t >= 0 ? roundDiv(n << BigInt(t), d, mode) : roundDiv(n, d << BigInt(-t), mode);
+}
+
+/** exact decimal string of k * 2^s */
+function dyDec(k, s){
+  const neg = k < 0n; k = babs(k);
+  let str;
+  if (s >= 0) str = (k << BigInt(s)).toString();
+  else {
+    const tt = -s, digits = (k * 5n ** BigInt(tt)).toString().padStart(tt + 1, '0');
+    str = digits.slice(0, -tt) + '.' + digits.slice(-tt);
+    str = str.replace(/0+$/, '').replace(/\.$/, '');
+  }
+  return (neg ? '-' : '') + str;
+}
+const dyRat = (k, s) => s >= 0 ? { n: k << BigInt(s), d: 1n } : { n: k, d: P2(-s) };
+
+/** scientific approximation of n/d with `sig` significant digits */
+function ratSci(n, d, sig = 10){
+  if (n === 0n) return '0';
+  const neg = n < 0n; n = babs(n);
+  let e10 = n.toString().length - d.toString().length, q;
+  for (let i = 0; i < 5; i++) {
+    const sh = sig - 1 - e10; let num = n, den = d;
+    if (sh >= 0) num *= 10n ** BigInt(sh); else den *= 10n ** BigInt(-sh);
+    q = roundDiv(num, den, 'rne');
+    const L = q.toString().length;
+    if (L > sig) e10++; else if (L < sig) e10--; else break;
+  }
+  const qs = q.toString();
+  let mant = qs[0] + (qs.length > 1 ? '.' + qs.slice(1) : '');
+  if (mant.includes('.')) mant = mant.replace(/0+$/, '').replace(/\.$/, '');
+  return (neg ? '-' : '') + mant + (e10 ? 'e' + e10 : '');
+}
+/** pretty approximation: plain notation for moderate magnitudes */
+function ratApprox(n, d, sig = 10){
+  const s = ratSci(n, d, sig);
+  const m = /e(-?\d+)$/.exec(s), e10 = m ? +m[1] : 0;
+  if (e10 >= -6 && e10 <= 15) {
+    const num = Number(s);
+    if (isFinite(num)) return String(+num.toPrecision(Math.min(sig, 17)));
+  }
+  return s;
+}
+
+/** parse "0b..", "0x..", or plain binary into BigInt that must fit in W bits */
+function parseBits(str, W){
+  let s = String(str).trim().toLowerCase().replace(/[\s_|]/g, '');
+  if (!s) throw new Error(t('eBitsEmpty'));
+  let v;
+  if (s.startsWith('0x')) {
+    s = s.slice(2).replace(/\./g, '');
+    if (!/^[0-9a-f]+$/.test(s)) throw new Error(t('eHex'));
+    v = BigInt('0x' + s);
+  } else {
+    if (s.startsWith('0b')) s = s.slice(2);
+    s = s.replace(/\./g, '');
+    if (!/^[01]+$/.test(s)) throw new Error(t('eBin'));
+    if (s.length > W) throw new Error(t('eTooLong', s.length, W));
+    v = BigInt('0b' + s);
+  }
+  if (v >= P2(W)) throw new Error(t('eTooBig', W));
+  return v;
+}
+const toBin = (u, W) => u.toString(2).padStart(W, '0');
+const toHex = (u, W) => '0x' + u.toString(16).toUpperCase().padStart(Math.ceil(W / 4), '0');
+const intVal = (el, name) => {
+  const v = el.value.trim();
+  if (!/^-?\d+$/.test(v)) throw new Error(t('eInt', name));
+  return parseInt(v, 10);
+};
+
+/* ====================== DOM helpers ====================== */
+function el(tag, cls, text){ const e = document.createElement(tag); if (cls) e.className = cls; if (text != null) e.textContent = text; return e; }
+function valueNode(str, approx){
+  if (str.length <= 70) {
+    const s = el('span', 'mono', str);
+    s.append(copyBtn(str));
+    return s;
+  }
+  const d = el('details');
+  const sm = el('summary', 'mono', '≈ ' + approx + t('longVal', str.replace(/[-.]/g, '').length));
+  const full = el('div', 'mono', str);
+  full.append(copyBtn(str));
+  d.append(sm, full);
+  return d;
+}
+function copyBtn(text){
+  const b = el('button', 'copy', t('copy'));
+  b.type = 'button';
+  b.onclick = e => { e.preventDefault(); navigator.clipboard?.writeText(text).then(() => { b.textContent = t('copied'); setTimeout(() => b.textContent = t('copy'), 1000); }); };
+  return b;
+}
+function fillTable(tbody, rows){
+  tbody.innerHTML = '';
+  for (const [k, v, mono] of rows) {
+    const tr = el('tr'), a = el('td', null, k), b = el('td');
+    if (v instanceof Node) b.append(v); else { b.textContent = v; if (mono) b.className = 'mono'; }
+    tr.append(a, b); tbody.append(tr);
+  }
+}
+/** flags are [i18nKey, cls] pairs, translated at render time */
+function tags(list){
+  const s = el('span');
+  for (const [k, cls] of list) s.append(el('span', 'tag ' + cls, t(k)));
+  return s;
+}
+/** groups: [{len, cls, label, pointAfter}] MSB first */
+function renderBits(box, u, W, groups, onToggle){
+  box.innerHTML = '';
+  let pos = W - 1;
+  for (const g of groups) {
+    if (g.len > 0) {
+      const gd = el('div', 'bgroup'), row = el('div', 'brow');
+      gd.append(el('div', 'blabel', g.label));
+      for (let j = 0; j < g.len; j++, pos--) {
+        const i = pos, v = (u >> BigInt(i)) & 1n;
+        const b = el('button', 'bit ' + g.cls + (v ? '' : ' zero'), v ? '1' : '0');
+        b.type = 'button'; b.title = t('bitTitle', i);
+        b.onclick = () => onToggle(i);
+        row.append(b);
+      }
+      gd.append(row); box.append(gd);
+    }
+    if (g.pointAfter) box.append(el('span', 'point', '.'));
+  }
+}
+
+/* ====================== FIXED POINT ====================== */
+const fx = { mode: 'enc', last: null };
+const FX_PRESETS = [
+  ['Q0.7 (int8)', 0, 7, true], ['Q3.4', 3, 4, true], ['Q0.15 (int16)', 0, 15, true], ['Q7.8', 7, 8, true],
+  ['Q15.16', 15, 16, true], ['Q0.31 (int32)', 0, 31, true], ['UQ8.8', 8, 8, false], ['UQ0.8', 0, 8, false],
+];
+function fxParams(){
+  const m = intVal($('fx-m'), 'm'), n = intVal($('fx-n'), 'n');
+  const signed = $('fx-signed').checked, incl = $('fx-incl').checked && signed;
+  if (m < 0 || n < 0) throw new Error(t('eNeg'));
+  if (signed && incl && m < 1) throw new Error(t('eIncl'));
+  const W = signed ? (incl ? m + n : m + n + 1) : m + n;
+  if (W < 1) throw new Error(t('eW1'));
+  if (W > 1024) throw new Error(t('eWmax'));
+  const intBits = signed ? (incl ? m - 1 : m) : m;
+  const minR = signed ? -P2(W - 1) : 0n, maxR = signed ? P2(W - 1) - 1n : P2(W) - 1n;
+  return { m, n, signed, incl, W, intBits, minR, maxR, name: (signed ? '' : 'U') + `Q${m}.${n}` };
+}
+function fxEncode(x, P, mode, ovf){
+  const flags = [];
+  if (x.nan) throw new Error(t('eFxNaN'));
+  let raw;
+  if (x.inf) { raw = x.neg ? P.minR - 1n : P.maxR + 1n; }
+  else raw = roundDiv(x.n << BigInt(P.n), x.d, mode);
+  if (raw > P.maxR || raw < P.minR) {
+    if (ovf === 'sat' || x.inf) { raw = raw > P.maxR ? P.maxR : P.minR; flags.push(['fOvfSat', 'warn']); }
+    else {
+      const u = mod(raw, P2(P.W));
+      raw = (P.signed && u >= P2(P.W - 1)) ? u - P2(P.W) : u;
+      flags.push(['fOvfWrap', 'warn']);
+    }
+  }
+  return { raw, flags };
+}
+function fxDecodeRaw(u, P){ return (P.signed && u >= P2(P.W - 1)) ? u - P2(P.W) : u; }
+
+function fxRun(){
+  const err = $('fx-err'); err.textContent = '';
+  let P;
+  try { P = fxParams(); } catch (e) { err.textContent = e.message; $('fx-out').hidden = true; return; }
+  $('fx-fmt').textContent = P.signed ? t('fxFmtS', P) : t('fxFmtU', P);
+  const res = P.n, rMax = dyRat(P.maxR, -res), rMin = dyRat(P.minR, -res);
+  fillTable($('fx-range'), [
+    [t('max'), valueNode(dyDec(P.maxR, -res), ratApprox(rMax.n, rMax.d))],
+    [t('min'), valueNode(dyDec(P.minR, -res), ratApprox(rMin.n, rMin.d))],
+    [t('res'), valueNode(`2^-${P.n} = ` + dyDec(1n, -res), '2^-' + P.n)],
+    [t('rawRange'), `[${P.minR}, ${P.maxR}]`, true],
+  ]);
+  $('fx-hint').textContent = fx.mode === 'enc' ? t('hintFxEnc') : t('hintDec', P.W);
+
+  let raw, flags = [], x = null;
+  try {
+    if (fx.mode === 'enc') { x = parseNum($('fx-in').value); ({ raw, flags } = fxEncode(x, P, $('fx-round').value, $('fx-ovf').value)); }
+    else raw = fxDecodeRaw(parseBits($('fx-in').value, P.W), P);
+  } catch (e) { err.textContent = e.message; $('fx-out').hidden = true; saveHash(); return; }
+
+  $('fx-out').hidden = false;
+  const u = mod(raw, P2(P.W)), bin = toBin(u, P.W);
+  fx.last = { u, W: P.W, raw, n: P.n };
+  renderBits($('fx-bits'), u, P.W, [
+    { len: P.signed ? 1 : 0, cls: 's', label: t('lSign') },
+    { len: P.intBits, cls: 'i', label: `${t('lInt')} (${P.intBits})`, pointAfter: P.n > 0 },
+    { len: P.n, cls: 'fr', label: `${t('lFrac')} (${P.n})` },
+  ], i => { const nu = u ^ P2(i); setMode('fx', 'dec', '0b' + toBin(nu, P.W)); });
+
+  const vStr = dyDec(raw, -P.n), vRat = dyRat(raw, -P.n);
+  const binPt = P.n > 0 ? bin.slice(0, P.W - P.n) + '.' + bin.slice(P.W - P.n) : bin;
+  const rows = [
+    [t('value'), valueNode(vStr, ratApprox(vRat.n, vRat.d, 17))],
+    ['Hex', valueNode(toHex(u, P.W))],
+    ['Binary', valueNode(binPt)],
+    [t('raw'), valueNode(raw.toString() + (P.n ? t('rawNote', P.n) : ''))],
+  ];
+  if (x && !x.inf) {
+    const en = x.n * vRat.d - vRat.n * x.d, ed = x.d * vRat.d;
+    rows.push([t('input'), ratApprox(x.n, x.d, 17), true]);
+    if (en === 0n) flags.unshift(['exact', 'ok']);
+    else {
+      flags.unshift(['rounded', 'warn']);
+      rows.push([t('error'), `${ratSci(en, ed, 6)}   = ${ratSci(en << BigInt(P.n), ed, 4)} LSB` +
+        (x.n !== 0n ? `   ${t('relErr')} ${ratSci(en * x.d, ed * babs(x.n), 4)}` : ''), true]);
+    }
+  }
+  if (flags.length) rows.push([t('status'), tags(flags)]);
+  fillTable($('fx-table'), rows);
+  saveHash();
+}
+
+/* ====================== FLOATING POINT ====================== */
+const fp = { mode: 'enc', last: null };
+const FP_PRESETS = [
+  ['FP64', 11, 52, 'ieee'], ['FP32', 8, 23, 'ieee'], ['TF32', 8, 10, 'ieee'], ['FP16', 5, 10, 'ieee'], ['BF16', 8, 7, 'ieee'],
+  ['FP8 E4M3 (OCP)', 4, 3, 'fn'], ['FP8 E5M2', 5, 2, 'ieee'], ['FP6 E3M2', 3, 2, 'none'], ['FP6 E2M3', 2, 3, 'none'], ['FP4 E2M1', 2, 1, 'none'],
+];
+function fpParams(){
+  const e = intVal($('fp-e'), 'e'), m = intVal($('fp-m'), 'm');
+  if (e < 1 || e > 30) throw new Error(t('eERange'));
+  if (m < 0 || m > 1000) throw new Error(t('eMRange'));
+  if ($('fp-bauto').checked) $('fp-bias').value = 2 ** (e - 1) - 1;
+  const bias = intVal($('fp-bias'), 'bias');
+  const sp = $('fp-sp').value, sub = $('fp-sub').checked;
+  const allOnes = Number(P2(e) - 1n);
+  let maxField, maxMant;
+  if (sp === 'ieee') { maxField = allOnes - 1; maxMant = P2(m) - 1n; }
+  else if (sp === 'fn') {
+    if (m === 0) { maxField = allOnes - 1; maxMant = 0n; } else { maxField = allOnes; maxMant = P2(m) - 2n; }
+  } else { maxField = allOnes; maxMant = P2(m) - 1n; }
+  return { e, m, bias, sp, sub, allOnes, maxField, maxMant, W: 1 + e + m, emin: 1 - bias };
+}
+const fpPack = (P, s, ef, mant) => (BigInt(s) << BigInt(P.e + P.m)) | (BigInt(ef) << BigInt(P.m)) | mant;
+
+function fpDecode(u, P){
+  const s = Number((u >> BigInt(P.e + P.m)) & 1n);
+  const ef = Number((u >> BigInt(P.m)) & (P2(P.e) - 1n));
+  const mant = u & (P2(P.m) - 1n);
+  const r = { s, ef, mant };
+  if (P.sp === 'ieee' && ef === P.allOnes) { r.cls = mant === 0n ? 'Inf' : 'NaN'; return r; }
+  if (P.sp === 'fn' && ef === P.allOnes && mant === P2(P.m) - 1n) { r.cls = 'NaN'; return r; }
+  if (ef === 0) { r.cls = mant === 0n ? 'Zero' : 'Subnormal'; r.k = mant; r.sx = P.emin - P.m; r.E = P.emin; }
+  else { r.cls = 'Normal'; r.k = P2(P.m) + mant; r.sx = ef - P.bias - P.m; r.E = ef - P.bias; }
+  if (s) r.k = -r.k;
+  return r;
+}
+function fpNaN(P, s){
+  if (P.sp === 'ieee') { if (P.m === 0) throw new Error(t('eNoNaNIeee')); return fpPack(P, s, P.allOnes, P2(P.m - 1)); }
+  if (P.sp === 'fn') return fpPack(P, s, P.allOnes, P2(P.m) - 1n);
+  throw new Error(t('eNoNaN'));
+}
+function fpEncode(x, P, mode, ovf){
+  const flags = [];
+  const s = x.neg ? 1 : 0;
+  if (x.nan) return { u: fpNaN(P, s), flags };
+  const magMode = mode === 'rdn' ? (s ? 'rup' : 'rdn') : mode === 'rup' ? (s ? 'rdn' : 'rup') : mode;
+  const overflow = (isInfInput) => {
+    const toInf = isInfInput || (ovf === 'inf' && (magMode === 'rne' || magMode === 'rna' || magMode === 'rup'));
+    if (P.sp === 'ieee' && toInf) { if (!isInfInput) flags.push(['fOvfInf', 'warn']); return fpPack(P, s, P.allOnes, 0n); }
+    if (P.sp === 'fn' && toInf) { flags.push(['fOvfNaN', 'warn']); return fpNaN(P, s); }
+    flags.push(['fOvfMax', 'warn']);
+    return fpPack(P, s, P.maxField, P.maxMant);
+  };
+  if (x.inf) return { u: overflow(true), flags };
+  const n = babs(x.n), d = x.d;
+  if (n === 0n) return { u: fpPack(P, s, 0, 0n), flags };
+  let E = floorLog2(n, d), ef, mant;
+  if (E < P.emin) {
+    const k = roundScaled(n, d, P.m - P.emin, magMode);
+    if (k >= P2(P.m)) { ef = 1; mant = 0n; }
+    else if (!P.sub && k !== 0n) { ef = 0; mant = 0n; flags.push(['fFtz', 'warn']); }
+    else { ef = 0; mant = k; if (k === 0n) flags.push(['fUnder', 'warn']); }
+  } else {
+    let k = roundScaled(n, d, P.m - E, magMode);
+    if (k === P2(P.m + 1)) { k = P2(P.m); E++; }
+    ef = E + P.bias; mant = k - P2(P.m);
+  }
+  if (ef > P.maxField || (ef === P.maxField && mant > P.maxMant)) return { u: overflow(false), flags };
+  return { u: fpPack(P, s, ef, mant), flags };
+}
+function fpValueRow(r){
+  if (r.cls === 'Inf') return [r.s ? '-Inf' : '+Inf', null];
+  if (r.cls === 'NaN') return ['NaN', null];
+  const str = (r.k === 0n && r.s) ? '-0' : dyDec(r.k, r.sx);
+  return [str, dyRat(r.k, r.sx)];
+}
+
+function fpRun(){
+  const err = $('fp-err'); err.textContent = '';
+  let P;
+  try { P = fpParams(); } catch (e) { err.textContent = e.message; $('fp-out').hidden = true; return; }
+  $('fp-fmt').textContent = `E${P.e}M${P.m} · ${P.W} bits · bias ${P.bias}`;
+  $('fp-hint').textContent = fp.mode === 'enc' ? t('hintFpEnc') : t('hintDec', P.W);
+
+  // range table
+  const rng = [];
+  const addV = (label, u) => { const r = fpDecode(u, P); const [str, rat] = fpValueRow(r);
+    rng.push([label, rat ? valueNode(str, ratApprox(rat.n, rat.d, 10)) : str]); };
+  addV(t('maxFinite'), fpPack(P, 0, P.maxField, P.maxMant));
+  if (P.maxField >= 1) addV(t('minNormal'), fpPack(P, 0, 1, 0n));
+  if (P.sub && P.m > 0) addV(t('minSub'), 1n);
+  rng.push(['Machine epsilon', valueNode(`2^-${P.m} = ` + dyDec(1n, -P.m), '2^-' + P.m)]);
+  rng.push([t('decDigits'), t('digits', ((P.m + 1) * Math.log10(2)).toFixed(2))]);
+  rng.push([t('specialRow'), t(P.sp === 'ieee' ? 'spDescIeee' : P.sp === 'fn' ? 'spDescFn' : 'spDescNone')]);
+  fillTable($('fp-range'), rng);
+
+  let u, flags = [], x = null;
+  try {
+    if (fp.mode === 'enc') { x = parseNum($('fp-in').value); ({ u, flags } = fpEncode(x, P, $('fp-round').value, $('fp-ovf').value)); }
+    else u = parseBits($('fp-in').value, P.W);
+  } catch (e) { err.textContent = e.message; $('fp-out').hidden = true; saveHash(); return; }
+
+  $('fp-out').hidden = false;
+  const r = fpDecode(u, P), bin = toBin(u, P.W);
+  fp.last = { u, W: P.W };
+  renderBits($('fp-bits'), u, P.W, [
+    { len: 1, cls: 's', label: t('lSign') },
+    { len: P.e, cls: 'e', label: `${t('lExp')} (${P.e})` },
+    { len: P.m, cls: 'm', label: `${t('lMan')} (${P.m})` },
+  ], i => { const nu = u ^ P2(i); setMode('fp', 'dec', '0b' + toBin(nu, P.W)); });
+
+  const [vStr, vRat] = fpValueRow(r);
+  const expBin = bin.slice(1, 1 + P.e), manBin = bin.slice(1 + P.e);
+  const rows = [
+    [t('value'), vRat ? valueNode(vStr, ratApprox(vRat.n, vRat.d, 17)) : vStr],
+    [t('cls'), r.cls],
+    ['Hex', valueNode(toHex(u, P.W))],
+    ['Binary', valueNode(bin[0] + ' ' + expBin + ' ' + manBin)],
+    ['Sign', String(r.s), true],
+    ['Exponent', `${expBin} = ${r.ef}` + (r.E !== undefined ? `  →  2^${r.E}` + (r.ef === 0 ? t('subNote') : `  (${r.ef} − ${P.bias})`) : ''), true],
+  ];
+  if (r.E !== undefined) rows.push(['Significand', `${r.ef === 0 ? '0' : '1'}.${manBin || '0'} (binary)`, true]);
+  if (x && !x.inf && !x.nan) {
+    rows.push([t('input'), ratApprox(x.n, x.d, 17), true]);
+    if (vRat) {
+      const en = x.n * vRat.d - vRat.n * x.d, ed = x.d * vRat.d;
+      if (en === 0n) flags.unshift(['exact', 'ok']);
+      else {
+        flags.unshift(['rounded', 'warn']);
+        const ulpExp = (r.ef === 0 ? P.emin : r.E) - P.m;
+        const ulp = ulpExp >= 0 ? ratSci(en, ed << BigInt(ulpExp), 4) : ratSci(en << BigInt(-ulpExp), ed, 4);
+        rows.push([t('error'), `${ratSci(en, ed, 6)}   = ${ulp} ULP` +
+          (x.n !== 0n ? `   ${t('relErr')} ${ratSci(en * x.d, ed * babs(x.n), 4)}` : ''), true]);
+      }
+    }
+  }
+  if (flags.length) rows.push([t('status'), tags(flags)]);
+  fillTable($('fp-table'), rows);
+  saveHash();
+}
+
+/* ====================== UI wiring ====================== */
+let tab = 'fixed';
+function showTab(tb){
+  tab = tb;
+  document.querySelectorAll('#tabs button').forEach(b => b.classList.toggle('on', b.dataset.tab === tb));
+  $('fixed').hidden = tb !== 'fixed'; $('float').hidden = tb !== 'float';
+  saveHash();
+}
+function setMode(panel, mode, value){
+  const st = panel === 'fx' ? fx : fp;
+  if (value === undefined && st.mode !== mode && st.last) {
+    // carry the current result across modes
+    if (mode === 'dec') value = toHex(st.last.u, st.last.W);
+    else {
+      try {
+        if (panel === 'fx') value = dyDec(st.last.raw, -st.last.n);
+        else { const r = fpDecode(st.last.u, fpParams()); value = fpValueRow(r)[0]; }
+        if (value.length > 60) value = undefined;
+      } catch (_) {}
+    }
+  }
+  st.mode = mode;
+  document.querySelectorAll(`.seg[data-panel=${panel}] button`).forEach(b => b.classList.toggle('on', b.dataset.mode === mode));
+  if (value !== undefined) $(panel + '-in').value = value;
+  panel === 'fx' ? fxRun() : fpRun();
+}
+
+const FIELDS = { fm: 'fx-m', fn: 'fx-n', fr: 'fx-round', fo: 'fx-ovf', fi: 'fx-in', pe: 'fp-e', pm: 'fp-m', pb: 'fp-bias', ps: 'fp-sp', pr: 'fp-round', po: 'fp-ovf', pi: 'fp-in' };
+const CHECKS = { fs: 'fx-signed', fc: 'fx-incl', pa: 'fp-bauto', pu: 'fp-sub' };
+let loading = false;
+function saveHash(){
+  if (loading) return;
+  const q = new URLSearchParams({ l: lang, t: tab, fx: fx.mode, fp: fp.mode });
+  for (const [k, id] of Object.entries(FIELDS)) q.set(k, $(id).value);
+  for (const [k, id] of Object.entries(CHECKS)) q.set(k, $(id).checked ? '1' : '0');
+  try { history.replaceState(null, '', '#' + q.toString()); } catch (_) {}
+}
+function loadHash(){
+  if (location.hash.length < 2) return;
+  const q = new URLSearchParams(location.hash.slice(1));
+  for (const [k, id] of Object.entries(FIELDS)) if (q.has(k)) $(id).value = q.get(k);
+  for (const [k, id] of Object.entries(CHECKS)) if (q.has(k)) $(id).checked = q.get(k) === '1';
+  if (q.get('fx') === 'dec') fx.mode = 'dec';
+  if (q.get('fp') === 'dec') fp.mode = 'dec';
+  if (q.get('t') === 'float') tab = 'float';
+  if (q.get('l') === 'en' || q.get('l') === 'zh') lang = q.get('l');
+}
+function detectLang(){
+  try { const s = localStorage.getItem('fxfp-lang'); if (s === 'en' || s === 'zh') return s; } catch (_) {}
+  return /^zh/i.test(navigator.language || '') ? 'zh' : 'en';
+}
+
+function init(){
+  loading = true;
+  lang = detectLang();
+  loadHash();
+  applyStatic();
+  for (const [name, m, n, s] of FX_PRESETS) {
+    const c = el('button', 'chip', name); c.type = 'button';
+    c.onclick = () => { $('fx-m').value = m; $('fx-n').value = n; $('fx-signed').checked = s; $('fx-incl').checked = false; syncIncl(); fxRun(); };
+    $('fx-presets').append(c);
+  }
+  for (const [name, e, m, sp] of FP_PRESETS) {
+    const c = el('button', 'chip', name); c.type = 'button';
+    c.onclick = () => { $('fp-e').value = e; $('fp-m').value = m; $('fp-sp').value = sp; $('fp-bauto').checked = true; $('fp-sub').checked = true; syncBias(); fpRun(); };
+    $('fp-presets').append(c);
+  }
+  document.querySelectorAll('#lang button').forEach(b => b.onclick = () => setLang(b.dataset.lang));
+  document.querySelectorAll('#tabs button').forEach(b => b.onclick = () => showTab(b.dataset.tab));
+  document.querySelectorAll('.seg[data-panel] button').forEach(b => b.onclick = () => setMode(b.parentElement.dataset.panel, b.dataset.mode));
+  ['fx-m', 'fx-n', 'fx-round', 'fx-ovf', 'fx-in', 'fx-signed', 'fx-incl'].forEach(id => $(id).addEventListener('input', fxRun));
+  ['fp-e', 'fp-m', 'fp-bias', 'fp-sp', 'fp-round', 'fp-ovf', 'fp-in', 'fp-sub'].forEach(id => $(id).addEventListener('input', fpRun));
+  $('fx-signed').addEventListener('change', syncIncl);
+  $('fp-bauto').addEventListener('change', () => { syncBias(); fpRun(); });
+  syncIncl(); syncBias();
+  document.querySelectorAll('.seg[data-panel]').forEach(s => {
+    const st = s.dataset.panel === 'fx' ? fx : fp;
+    s.querySelectorAll('button').forEach(b => b.classList.toggle('on', b.dataset.mode === st.mode));
+  });
+  showTab(tab);
+  loading = false;
+  fxRun(); fpRun();
+}
+function syncIncl(){ $('fx-incl').disabled = !$('fx-signed').checked; }
+function syncBias(){
+  const auto = $('fp-bauto').checked; $('fp-bias').disabled = auto;
+  if (auto) { const e = parseInt($('fp-e').value, 10); if (e >= 1 && e <= 30) $('fp-bias').value = 2 ** (e - 1) - 1; }
+}
+init();
+</script>
+</body>
+</html>
